@@ -301,15 +301,22 @@ int main (int argc, char * * argv)
   int i, l, n, a;
   char * * v;
   uint16_t w, h;
+  FILE * log = NULL;
 
   if (argc == 2 && !strcmp(argv[1], "-h"))
   {
     printf(
-      "Usage: linesel < options.lst\n"
+      "Usage: linesel [-h] [-l ACX_LOG] < options.lst\n"
       "Synopsis:  asks user to choose one of the options from standard input\n"
       "           and prints that to standard output\n");
     return 0;
   }
+  if (argc == 3 && !strcmp(argv[1], "-l"))
+  {
+    log = fopen(argv[2], "wt");
+  }
+
+  if (log) acx1_logging(3, log);
 
   i = 0; n = 0;
   a = 0x2;
