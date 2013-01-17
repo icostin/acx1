@@ -4,10 +4,11 @@
  *
  * Changelog:
  *  - 2013/01/06 Costin Ionescu: initial release
- *
+ *  - 2013/01/17 Costin Ionescu: writing with WriteConsoleW so that wide-chars
+ *    are printed ok
  */
 #include <windows.h>
-
+#include <c41.h>
 #include <acx1.h>
 
 static FILE * log_file = NULL;
@@ -17,6 +18,7 @@ static uint16_t screen_height, screen_width;
 static uint16_t cursor_row, cursor_col;
 static uint16_t write_row, write_col;
 static uint16_t attr;
+static DWORD orig_in_mode, orig_out_mode;
 static CONSOLE_CURSOR_INFO cci;
 
 /* acx1_name ****************************************************************/
@@ -52,6 +54,16 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
   { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
 
   if (!GetConsoleCursorInfo(hout, &cci))
+  { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
+
+  if (!GetConsoleMode(hin, &orig_in_mode))
+  { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
+  if (!GetConsoleMode(hout, &orig_out_mode))
+  { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
+
+  if (!SetConsoleMode(hin, ENABLE_QUICK_EDIT_MODE))
+  { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
+  if (!SetConsoleMode(hout, 0))
   { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
 
   screen_width = csbi.dwSize.X;
@@ -207,6 +219,15 @@ ACX1_API unsigned int ACX1_CALL acx1_write_start ()
 {
   write_row = cursor_row;
   write_col = cursor_col;
+  if (cci.bVisible)
+  {
+    char b;
+    cci.bVisible = 0;
+    b = SetConsoleCursorInfo(hout, &cci);
+    cci.bVisible = 1;
+    if (!b) return ACX1_TERM_IO_FAILED;
+  }
+
   return 0;
 }
 
@@ -229,6 +250,7 @@ ACX1_API unsigned int ACX1_CALL acx1_attr (int bg, int fg, unsigned int mode)
   if ((fg & 2)) attr |= FOREGROUND_GREEN;
   if ((fg & 4)) attr |= FOREGROUND_BLUE;
   if ((fg & 8)) attr |= FOREGROUND_INTENSITY;
+  if (!SetConsoleTextAttribute(hout, attr)) return ACX1_TERM_IO_FAILED;
 
   return 0;
 }
@@ -236,43 +258,33 @@ ACX1_API unsigned int ACX1_CALL acx1_attr (int bg, int fg, unsigned int mode)
 /* acx1_write_pos ***********************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_write_pos (uint16_t r, uint16_t c)
 {
-  write_row = r - 1;
-  write_col = c - 1;
+  COORD p;
+  p.Y = write_row = r - 1;
+  p.X = write_col = c - 1;
+  if (!SetConsoleCursorPosition(hout, p)) return ACX1_TERM_IO_FAILED;
   return 0;
 }
 
 /* acx1_write ***************************************************************/
-ACX1_API unsigned int ACX1_CALL acx1_write (void * data, size_t len)
+ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
 {
-  CHAR_INFO ci[0x200];
-  uint8_t * b;
-  size_t i, l;
-  SMALL_RECT wr;
-  COORD bs, bc;
+  WORD buf[0x200];
+  DWORD wc;
+  size_t cpc, width, bl, cl;
+  int c;
 
-  b = data;
-  while (len)
-  {
-    l = sizeof(ci) / sizeof(ci[0]);
-    if (l > len) l = len;
-    for (i = 0; i < l; ++i)
-    {
-      ci[i].Char.UnicodeChar = b[i];
-      ci[i].Attributes = attr;
-    }
-    bs.X = l;
-    bs.Y = 1;
-    bc.X = 0;
-    bc.Y = 0;
-    wr.Left = write_col;
-    wr.Top = write_row;
-    wr.Right = screen_width - 1;
-    wr.Bottom = write_row;
-    if (!WriteConsoleOutput(hout, ci, bs, bc, &wr))
-      return ACX1_TERM_IO_FAILED;
-    write_col = wr.Right + 1;
-    len -= l;
-  }
+  c = c41_utf8_str_measure(c41_term_char_width_wctx, NULL,
+                           data, len, C41_SSIZE_MAX, screen_width - write_col,
+                           &bl, &cl, &width);
+  if (c < 0) return ACX1_BAD_DATA;
+
+  c = c41_mutf8_str_decode(data, len, buf, C41_ITEM_COUNT(buf), NULL, &cpc);
+  if (c) return ACX1_BAD_DATA;
+
+  if (!WriteConsoleW(hout, buf, cpc, &wc, NULL)) return ACX1_TERM_IO_FAILED;
+
+  write_col += width;
+  if (write_col > screen_width) write_col = 0;
 
   return 0;
 }
@@ -290,6 +302,10 @@ ACX1_API unsigned int ACX1_CALL acx1_fill (uint32_t ch, uint16_t count)
   if (!FillConsoleOutputAttribute(hout, attr, count, co, &w))
     return ACX1_TERM_IO_FAILED;
   write_col += count;
+  if (write_col >= screen_width) write_col = screen_width - 1;
+  co.Y = write_row;
+  co.X = write_col;
+  if (!SetConsoleCursorPosition(hout, co)) return ACX1_TERM_IO_FAILED;
   return 0;
 }
 
@@ -303,6 +319,12 @@ ACX1_API unsigned int ACX1_CALL acx1_clear ()
 /* acx1_write_stop **********************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_write_stop ()
 {
+  COORD p;
+  if (cci.bVisible &&
+      !SetConsoleCursorInfo(hout, &cci)) return ACX1_TERM_IO_FAILED;
+  p.Y = cursor_row;
+  p.X = cursor_col;
+  if (!SetConsoleCursorPosition(hout, p)) return ACX1_TERM_IO_FAILED;
   return 0;
 }
 

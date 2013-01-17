@@ -1111,7 +1111,7 @@ ACX1_API unsigned int ACX1_CALL acx1_write_stop ()
 }
 
 /* acx1_write ***************************************************************/
-ACX1_API unsigned int ACX1_CALL acx1_write (void * data, size_t len)
+ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
 {
   return tty_write(data, len) ? ACX1_TERM_IO_FAILED : ACX1_OK;
 }

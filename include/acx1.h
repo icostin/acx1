@@ -173,7 +173,7 @@ ACX1_API unsigned int ACX1_CALL acx1_write_start ();
 ACX1_API unsigned int ACX1_CALL acx1_charset (unsigned int cs);
 ACX1_API unsigned int ACX1_CALL acx1_attr (int bg, int fg, unsigned int mode);
 ACX1_API unsigned int ACX1_CALL acx1_write_pos (uint16_t r, uint16_t c);
-ACX1_API unsigned int ACX1_CALL acx1_write (void * data, size_t len);
+ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len);
 ACX1_API unsigned int ACX1_CALL acx1_fill (uint32_t ch, uint16_t count);
 ACX1_API unsigned int ACX1_CALL acx1_clear ();
 ACX1_API unsigned int ACX1_CALL acx1_write_stop ();
