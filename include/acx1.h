@@ -3,6 +3,7 @@
  * Main header file
  *
  * Changelog:
+ *  - 2013/01/18 Costin Ionescu: added constants for standard colours
  *  - 2013/01/06 Costin Ionescu: initial release
  *
  */
@@ -78,6 +79,7 @@ typedef   signed int         int32_t;
 #define ACX1_NOT_WRITING        10
 #define ACX1_NOT_SUPPORTED      11
 
+/* keys *********************************************************************/
 #define ACX1_KEY_MASK           0x003FFFFF
 
 #define ACX1_TAB                0x00000009 /**< Tab. */
@@ -126,10 +128,26 @@ typedef   signed int         int32_t;
 #define ACX1_F11                ACX1_F(11)
 #define ACX1_F12                ACX1_F(12)
 
+/* modifiers ****************************************************************/
 #define ACX1_SHIFT              0x00400000
 #define ACX1_ALT                0x00800000
 #define ACX1_CTRL               0x01000000
 
+/* colours ******************************************************************/
+#define ACX1_BLACK              0
+#define ACX1_RED                1
+#define ACX1_GREEN              2
+#define ACX1_YELLOW             3
+#define ACX1_BLUE               4
+#define ACX1_MAGENTA            5
+#define ACX1_CYAN               6
+#define ACX1_GRAY               7
+#define ACX1_GREY               7
+
+#define ACX1_DARK               0
+#define ACX1_BRIGHT             8
+
+/* event_types **************************************************************/
 #define ACX1_NONE 0
 #define ACX1_RESIZE 1
 #define ACX1_KEY 2
