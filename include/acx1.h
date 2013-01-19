@@ -78,6 +78,7 @@ typedef   signed int         int32_t;
 #define ACX1_ALREADY_WRITING    9
 #define ACX1_NOT_WRITING        10
 #define ACX1_NOT_SUPPORTED      11
+#define ACX1_BAD_DATA           12
 
 /* keys *********************************************************************/
 #define ACX1_KEY_MASK           0x003FFFFF
@@ -145,7 +146,26 @@ typedef   signed int         int32_t;
 #define ACX1_GREY               7
 
 #define ACX1_DARK               0
-#define ACX1_BRIGHT             8
+#define ACX1_LIGHT              8
+
+#define ACX1_DARK_RED           (1 | ACX1_DARK)
+#define ACX1_DARK_GREEN         (2 | ACX1_DARK)
+#define ACX1_DARK_YELLOW        (3 | ACX1_DARK)
+#define ACX1_DARK_BLUE          (4 | ACX1_DARK)
+#define ACX1_DARK_MAGENTA       (5 | ACX1_DARK)
+#define ACX1_DARK_CYAN          (6 | ACX1_DARK)
+#define ACX1_LIGHT_GRAY         (7 | ACX1_DARK)
+#define ACX1_LIGHT_GREY         (7 | ACX1_DARK)
+
+#define ACX1_DARK_GRAY          (0 | ACX1_LIGHT)
+#define ACX1_DARK_GREY          (0 | ACX1_LIGHT)
+#define ACX1_LIGHT_RED          (1 | ACX1_LIGHT)
+#define ACX1_LIGHT_GREEN        (2 | ACX1_LIGHT)
+#define ACX1_LIGHT_YELLOW       (3 | ACX1_LIGHT)
+#define ACX1_LIGHT_BLUE         (4 | ACX1_LIGHT)
+#define ACX1_LIGHT_MAGENTA      (5 | ACX1_LIGHT)
+#define ACX1_LIGHT_CYAN         (6 | ACX1_LIGHT)
+#define ACX1_WHITE              (7 | ACX1_LIGHT)
 
 /* event_types **************************************************************/
 #define ACX1_NONE 0

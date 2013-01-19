@@ -3,6 +3,9 @@
  * GNU/Linux Terminal support
  *
  * Changelog:
+ *  - 2013/01/19 Costin Ionescu: 
+ *    - tty_write(): wait for tty to be ready when write() fails with EAGAIN
+ *    - tty_write(): fixed bug when passing remaining buffer after EINTR
  *  - 2013/01/06 Costin Ionescu: initial release
  *
  */
@@ -75,19 +78,19 @@ static unsigned int worker_error = 0;
 static unsigned int decode_mode = 0;
 
 #define LW(...) (log_level >= 2 && log_file ? \
-                 fprintf(log_file, "[acx1]Warning(%s:%03u:%s): ", \
-                                   __FILE__, __LINE__, __FUNCTION__), \
-                 fprintf(log_file, __VA_ARGS__) : 0)
+                 (fprintf(log_file, "[acx1]Warning(%s:%03u:%s): ", \
+                                    __FILE__, __LINE__, __FUNCTION__), \
+                  fprintf(log_file, __VA_ARGS__)) : 0)
 
 #define LI(...) (log_level >= 3 && log_file ? \
-                 fprintf(log_file, "[acx1]Info(%s:%03u:%s): ", \
+                 (fprintf(log_file, "[acx1]Info(%s:%03u:%s): ", \
                                    __FILE__, __LINE__, __FUNCTION__), \
-                 fprintf(log_file, __VA_ARGS__) : 0)
+                  fprintf(log_file, __VA_ARGS__)) : 0)
 
 #define LE(...) (log_level >= 1 && log_file ? \
-                 fprintf(log_file, "[acx1]Error(%s:%03u:%s): ", \
+                 (fprintf(log_file, "[acx1]Error(%s:%03u:%s): ", \
                                    __FILE__, __LINE__, __FUNCTION__), \
-                 fprintf(log_file, __VA_ARGS__) : 0)
+                  fprintf(log_file, __VA_ARGS__)) : 0)
 
 #define Z(_cond, _rc) \
   if ((_cond)) { \
@@ -151,15 +154,29 @@ static int tty_write (void const * data, size_t len)
   ssize_t wlen;
   uint8_t const * p;
   int e;
+  fd_set fds;
+
+  if (log_level > 3)
+  {
+    uint8_t tmp[0x100];
+    uint_t tl;
+    tl = (len > sizeof(tmp) / 2) ? sizeof(tmp) / 2 : len;
+    LI("tty_write: tty=%d len=0x%lX %s\n", tty_fd, (long) len, (char *) c41_hexz(tmp, data, tl));
+  }
 
   for (p = data; len; )
   {
-    wlen = write(tty_fd, data, len);
+    wlen = write(tty_fd, p, len);
     if (wlen < 0)
     {
       e = errno;
       if (e == EINTR) continue;
       LE("write error %d = %s\n", e, strerror(e));
+      FD_ZERO(&fds);
+      FD_SET(tty_fd, &fds);
+      e = select(tty_fd + 1, NULL, &fds, NULL, NULL);
+      LI("waiting for write to be available for tty_fd %d\n", tty_fd);
+      wlen = 0;
     }
     p += wlen;
     len -= wlen;
@@ -796,7 +813,7 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
   Z(tty_write_const(NO_WRAPAROUND_MODE), ACX1_TERM_IO_FAILED);
   Z(tty_write_const(BACKARROW_SENDS_DEL), ACX1_TERM_IO_FAILED);
 
-  queue_shift = 4;
+  queue_shift = 6;
   queue_len = 0;
   qx_mask = (1 << queue_shift) - 1;
   qx_begin = 0;
@@ -859,6 +876,7 @@ ACX1_API void ACX1_CALL acx1_finish ()
       LW("failed closing read-end of worker pipe (error %d = %s)\n",
          i, strerror(i));
     }
+    worker_pipe[0] = -1;
   }
 
   if (mutex_created)
@@ -882,7 +900,7 @@ ACX1_API void ACX1_CALL acx1_finish ()
               i, strerror(i));
   }
 
-  if (queue_a) free(queue_a);
+  if (queue_a) { free(queue_a); queue_a = NULL; }
 
   if (tio_set)
   {

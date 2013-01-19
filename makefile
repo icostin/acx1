@@ -19,7 +19,7 @@ clean:
 	-rm -rf out tags
 
 arc:
-	cd .. && tar -Jcvf acx1.txz acx1/src acx1/include acx1/makefile acx1/vs9make.cmd acx1/*.txt
+	cd .. && tar -Jcvf acx1.txz acx1/src acx1/include acx1/makefile acx1/vs9make.cmd acx1/LICENCE acx1/README*
 
 tags:
 	ctags -R --fields=+iaS --extra=+q --exclude='.git' .
@@ -48,18 +48,18 @@ uninstall:
 out/libacx1.so: out/gnulinux.o out/common.o | out/
 	gcc -shared -o$@ $^ -lpthread -lc41
 	
-out/gnulinux.o: src/gnulinux.c | out/
+out/gnulinux.o: src/gnulinux.c include/acx1.h | out/
 	gcc -c $(gcc_flags) -Iinclude -O3 -fpic -o$@ -DACX1_DLIB_BUILD -DNDEBUG $<
 
 out/common.o: src/common.c | out/
 	gcc -c $(gcc_flags) -Iinclude -O3 -fpic -o$@ -DACX1_DLIB_BUILD -DNDEBUG $<
 
-out/test: src/test.c | out/
+out/test: src/test.c include/acx1.h | out/
 	gcc $(gcc_flags) -O3 -fPIC -o$@ -Iinclude -DACX1_DLIB_BUILD -DNDEBUG $< -Lout/ -lacx1
 
 linesel: out/linesel dlib 
 	LD_LIBRARY_PATH=$(LD_LIBRARY_PATH):out $< < src/linesel.c
 
-out/linesel: src/linesel.c | out/
+out/linesel: src/linesel.c include/acx1.h dlib | out/
 	gcc $(gcc_flags) -O3 -fPIC -o$@ -Iinclude -DNDEBUG $< -Lout -lacx1 -lc41
 
