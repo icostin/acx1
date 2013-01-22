@@ -20,6 +20,8 @@
 int normal_bg = 4, normal_fg = 7;
 int sel_bg = 7, sel_fg = 0;
 
+FILE * log_file = NULL;
+
 #define A(_expr) if (!(rc = (_expr))) ; else \
                     do { line = __LINE__; goto l_acx_fail; } while (0)
 
@@ -66,7 +68,8 @@ int linesel (char * * v, int n, char * init_str)
   char ichg;
 
   xmap = malloc(n * sizeof(int));
-  if (!xmap) return -2;
+  A(!xmap);
+  // if (!xmap) return -2;
   ichg = 1;
   for (i = 0; i < n; ++i) xmap[i] = i;
 
@@ -86,11 +89,13 @@ int linesel (char * * v, int n, char * init_str)
   for (;;)
   {
     opt_lines = h - 3;
-    if (opt_lines <= 0)
-    {
-      // screen too small; wait for resize
-      return -2;
-    }
+    A(opt_lines <= 0);
+
+//    if (opt_lines <= 0)
+//    {
+//      // screen too small; wait for resize
+//      return -2;
+//    }
 
     if (ichg)
     {
@@ -286,11 +291,13 @@ int linesel (char * * v, int n, char * init_str)
       ibuf[ilen] = 0;
       ichg = 1;
     }
-
   }
 
 l_acx_fail:
-  fprintf(stderr, "Error: %s (line %u)\n", acx1_status_str(rc), line);
+  {
+    FILE * f = log_file ? log_file : stderr;
+    fprintf(f, "Error: %s (line %u)\n", acx1_status_str(rc), line);
+  }
   return -2;
 }
 
@@ -301,7 +308,6 @@ int main (int argc, char * * argv)
   int i, l, n, a;
   char * * v;
   uint16_t w, h;
-  FILE * log = NULL;
 
   if (argc == 2 && !strcmp(argv[1], "-h"))
   {
@@ -313,10 +319,10 @@ int main (int argc, char * * argv)
   }
   if (argc == 3 && !strcmp(argv[1], "-l"))
   {
-    log = fopen(argv[2], "wt");
+    log_file = fopen(argv[2], "wt");
   }
 
-  if (log) acx1_logging(3, log);
+  if (log_file) acx1_logging(3, log_file);
 
   i = 0; n = 0;
   a = 0x2;
@@ -354,10 +360,6 @@ int main (int argc, char * * argv)
 
   A(acx1_init());
   i = linesel(v, n, "");
-  // A(acx1_write_start());
-  // A(acx1_attr(0, 7, 0));
-  // A(acx1_clear());
-  // A(acx1_write_stop());
   A(acx1_write_start());
   A(acx1_attr(0, 7, 0));
   A(acx1_clear());
@@ -366,7 +368,11 @@ int main (int argc, char * * argv)
   A(acx1_set_cursor_pos(h, 1));
   acx1_finish();
 
-  if (i < 0) return 1;
+  if (i < 0)
+  {
+    fprintf(stderr, "linesel ret code: %d\n", i);
+    return 1;
+  }
   puts(v[i]);
   return 0;
 l_acx_fail:

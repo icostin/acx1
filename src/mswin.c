@@ -250,7 +250,7 @@ ACX1_API unsigned int ACX1_CALL acx1_attr (int bg, int fg, unsigned int mode)
   if ((fg & 2)) attr |= FOREGROUND_GREEN;
   if ((fg & 4)) attr |= FOREGROUND_BLUE;
   if ((fg & 8)) attr |= FOREGROUND_INTENSITY;
-  if (!SetConsoleTextAttribute(hout, attr)) return ACX1_TERM_IO_FAILED;
+  //if (!SetConsoleTextAttribute(hout, attr)) return ACX1_TERM_IO_FAILED;
 
   return 0;
 }
@@ -268,23 +268,60 @@ ACX1_API unsigned int ACX1_CALL acx1_write_pos (uint16_t r, uint16_t c)
 /* acx1_write ***************************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
 {
-  WORD buf[0x200];
-  DWORD wc;
-  size_t cpc, width, bl, cl;
-  int c;
+//  WORD buf[0x200];
+//  DWORD wc;
+//  size_t cpc, width, bl, cl;
+//  int c;
+//
+//  c = c41_utf8_str_measure(c41_term_char_width_wctx, NULL,
+//                           data, len, C41_SSIZE_MAX, screen_width - write_col,
+//                           &bl, &cl, &width);
+//  if (c < 0) return ACX1_BAD_DATA;
+//
+//  c = c41_mutf8_str_decode(data, len, buf, C41_ITEM_COUNT(buf), NULL, &cpc);
+//  if (c) return ACX1_BAD_DATA;
+//
+//  if (!WriteConsoleW(hout, buf, cpc, &wc, NULL)) return ACX1_TERM_IO_FAILED;
+//
+//  write_col += width;
+//  if (write_col > screen_width) write_col = 0;
+//
+//  return 0;
 
-  c = c41_utf8_str_measure(c41_term_char_width_wctx, NULL,
-                           data, len, C41_SSIZE_MAX, screen_width - write_col,
-                           &bl, &cl, &width);
-  if (c < 0) return ACX1_BAD_DATA;
+  uint16_t buf[0x200];
+  size_t cpc;
+  int c;
+  CHAR_INFO ci[0x200];
+  size_t i, j, l;
+  SMALL_RECT wr;
+  COORD bs, bc;
+  //uint8_t * b;
 
   c = c41_mutf8_str_decode(data, len, buf, C41_ITEM_COUNT(buf), NULL, &cpc);
   if (c) return ACX1_BAD_DATA;
 
-  if (!WriteConsoleW(hout, buf, cpc, &wc, NULL)) return ACX1_TERM_IO_FAILED;
+  //b = data; cpc = len;
+  l = C41_ITEM_COUNT(ci);
+  for (c = 0, i = j = 0; c >= 0 && i < cpc && j < l; ++i, j += c)
+  {
+    ci[j].Char.UnicodeChar = buf[i];
+    ci[j].Attributes = attr;
+    c = c41_term_char_width(buf[i]);
+  }
+  if (c < 0) return ACX1_BAD_DATA;
+  if (!j) return 0; // nothing to print
 
-  write_col += width;
-  if (write_col > screen_width) write_col = 0;
+  bs.X = j;
+  bs.Y = 1;
+  bc.X = 0;
+  bc.Y = 0;
+  wr.Left = write_col;
+  wr.Top = write_row;
+  wr.Right = screen_width - 1;
+  wr.Bottom = write_row;
+  if (!WriteConsoleOutputW(hout, ci, bs, bc, &wr))
+    return ACX1_TERM_IO_FAILED;
+  write_col = wr.Right + 1;
 
   return 0;
 }
@@ -303,9 +340,9 @@ ACX1_API unsigned int ACX1_CALL acx1_fill (uint32_t ch, uint16_t count)
     return ACX1_TERM_IO_FAILED;
   write_col += count;
   if (write_col >= screen_width) write_col = screen_width - 1;
-  co.Y = write_row;
-  co.X = write_col;
-  if (!SetConsoleCursorPosition(hout, co)) return ACX1_TERM_IO_FAILED;
+  // co.Y = write_row;
+  // co.X = write_col;
+  // if (!SetConsoleCursorPosition(hout, co)) return ACX1_TERM_IO_FAILED;
   return 0;
 }
 
