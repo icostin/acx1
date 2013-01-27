@@ -191,6 +191,16 @@ struct acx1_event_s
 #define ACX1_UNDERLINE          (1 << 1)
 #define ACX1_INVERSE            (1 << 2)
 
+
+typedef struct acx1_attr_s acx1_attr_t;
+struct acx1_attr_s
+{
+  uint32_t bg;
+  uint32_t fg;
+  uint32_t mode;
+};
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -215,6 +225,16 @@ ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len);
 ACX1_API unsigned int ACX1_CALL acx1_fill (uint32_t ch, uint16_t count);
 ACX1_API unsigned int ACX1_CALL acx1_clear ();
 ACX1_API unsigned int ACX1_CALL acx1_write_stop ();
+
+ACX1_API unsigned int ACX1_CALL acx1_rect
+(
+  uint8_t const * const * data, // array of rows of utf8 text with special escapes
+  uint16_t start_row,
+  uint16_t start_col,
+  uint16_t row_num, 
+  uint16_t col_num,
+  acx1_attr_t * attrs
+);
 
 #ifdef __cplusplus
 };

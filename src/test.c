@@ -20,6 +20,17 @@ int main (int argc, char const * const * argv)
   char name[0x40];
   char buf[0x80];
   int line;
+  acx1_attr_t rect_attrs[3] =
+  {
+    { ACX1_BLUE, ACX1_LIGHT_YELLOW, 0 },
+    { ACX1_GREEN, ACX1_BLACK, ACX1_BOLD },
+    { ACX1_BLACK, ACX1_LIGHT_RED, ACX1_UNDERLINE },
+  };
+  uint8_t const * (rect_lines[]) =
+  {
+    (uint8_t const *) "Abcd " "\a\x01" "def" "\a\x02" "ghi",
+    (uint8_t const *) "aaaaaaaaaaaaaaa\a\x01" "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  };
 
   printf("acx1 test\n"
          "- using dynamic library: %s\n", acx1_name());
@@ -48,7 +59,7 @@ int main (int argc, char const * const * argv)
     C(acx1_write(buf, strlen(buf)));
     C(acx1_attr(0, 7, 0));
     C(acx1_write(" ]", 2));
-    C(acx1_fill('-', w));
+    C(acx1_fill('-', w - 4 - strlen(buf)));
     C(acx1_write_pos(r, c));
     C(acx1_attr(4, 11, 0));
     C(acx1_write("*", 1));
@@ -57,9 +68,9 @@ int main (int argc, char const * const * argv)
     switch (e.type)
     {
     case ACX1_KEY:
-      sprintf(buf, "key: km = 0x%08X name = %s", 
+      sprintf(buf, "key: km = 0x%08X name = %s",
              e.km, (char *) acx1_key_name(name, e.km, 0));
-      if (e.km == (ACX1_CTRL | 'L')) 
+      if (e.km == (ACX1_CTRL | 'L'))
       {
         C(acx1_write_start());
         C(acx1_attr(0, 7, 0));
@@ -93,6 +104,7 @@ int main (int argc, char const * const * argv)
       }
       if (e.km == 'C') C(acx1_set_cursor_mode(0));
       if (e.km == 'c') C(acx1_set_cursor_mode(1));
+      if (e.km == 'r') C(acx1_rect(rect_lines, r, c, 2, 16, rect_attrs));
       break;
     case ACX1_RESIZE:
       sprintf(buf, "screen resized: %ux%u", e.size.w, e.size.h);

@@ -3,6 +3,8 @@
  * GNU/Linux Terminal support
  *
  * Changelog:
+ *  - 2013/01/27 Costin Ionescu:
+ *    - acx1_rect()
  *  - 2013/01/19 Costin Ionescu: 
  *    - tty_write(): wait for tty to be ready when write() fails with EAGAIN
  *    - tty_write(): fixed bug when passing remaining buffer after EINTR
@@ -55,7 +57,7 @@ static FILE * log_file = NULL;
 static int log_level = 0;
 static int tty_fd = -1;
 static struct termios orig_tio;
-static uint16_t width, height;
+static uint16_t screen_width, screen_height;
 static uint16_t user_row, user_col;
 static uint16_t real_row, real_col;
 static int worker_pipe[2] = { -1, -1};
@@ -111,6 +113,46 @@ ACX1_API void acx1_logging (int level, FILE * lf)
 {
   log_file = lf;
   log_level = level;
+}
+
+/* set_cursor_pos_str ********************************************************/
+static uint_t ACX1_CALL set_cursor_pos_str (uint8_t * buf, 
+                                            uint16_t r, uint16_t c)
+{
+  return sprintf((char *) buf, "\e[%u;%uH", r, c);
+}
+
+static uint_t ACX1_CALL set_attr_str (uint8_t * buf, int bg, int fg, int mode)
+{
+  int ia[0x10], in;
+  int o, k;
+
+  o = 0;
+  in = 0;
+  ia[in++] = 0;
+  if (bg < 0) return ACX1_NO_CODE;
+  if (bg < 8) ia[in++] = 40 + bg;
+  else if (bg < 0x10) ia[in++] = 100 - 8 + bg;
+  else { ia[in++] = 38; ia[in++] = 5; ia[in++] = bg; }
+
+  if (fg < 0) return ACX1_NO_CODE;
+  if (fg < 8) ia[in++] = 30 + fg;
+  else if (fg < 0x10) ia[in++] = 90 - 8 + fg;
+  else { ia[in++] = 48; ia[in++] = 5; ia[in++] = fg; }
+
+  if ((mode & ACX1_BOLD)) ia[in++] = 1;
+  if ((mode & ACX1_UNDERLINE)) ia[in++] = 4;
+  if ((mode & ACX1_INVERSE)) ia[in++] = 7;
+
+  buf[0] = 0x1B;
+  buf[1] = '[';
+  o = 2;
+  for (k = 0; k < in; ++k, o += strlen((char *) &buf[o]))
+  {
+    sprintf((char *) &buf[o], "%u;", ia[k]);
+  }
+  buf[o - 1] = 'm';
+  return o;
 }
 
 /* qpush1 *******************************************************************/
@@ -724,10 +766,10 @@ static void * worker_main (void * arg)
       }
 
       pthread_mutex_lock(&mutex);
-      if (height != wsz.ws_row || width != wsz.ws_col)
+      if (screen_height != wsz.ws_row || screen_width != wsz.ws_col)
       {
-        height = wsz.ws_row;
-        width = wsz.ws_col;
+        screen_height = wsz.ws_row;
+        screen_width = wsz.ws_col;
         screen_resized = 1;
         if (waiting_for_event) pthread_cond_signal(&event_cond);
       }
@@ -786,8 +828,8 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
 
   Z(tcgetattr(tty_fd, &orig_tio), ACX1_TERM_IO_FAILED);
   Z(ioctl(tty_fd, TIOCGWINSZ, &wsz), ACX1_TERM_IO_FAILED);
-  height = wsz.ws_row;
-  width = wsz.ws_col;
+  screen_height = wsz.ws_row;
+  screen_width = wsz.ws_col;
   Z(tcflush(tty_fd, TCIOFLUSH), ACX1_TERM_IO_FAILED);
 
   tio = orig_tio;
@@ -932,8 +974,8 @@ ACX1_API void ACX1_CALL acx1_finish ()
 ACX1_API unsigned int ACX1_CALL acx1_get_screen_size (uint16_t * h, uint16_t * w)
 {
   pthread_mutex_lock(&mutex);
-  *h = height;
-  *w = width;
+  *h = screen_height;
+  *w = screen_width;
   pthread_mutex_unlock(&mutex);
   return ACX1_OK;
 }
@@ -954,8 +996,8 @@ ACX1_API unsigned int ACX1_CALL acx1_read_event (acx1_event_t * event_p)
       LI("read_event: screen_resized\n");
       screen_resized = 0;
       event_p->type = ACX1_RESIZE;
-      event_p->size.w = width;
-      event_p->size.h = height;
+      event_p->size.w = screen_width;
+      event_p->size.h = screen_height;
       break;
     }
 
@@ -997,8 +1039,9 @@ ACX1_API unsigned int ACX1_CALL acx1_get_cursor_pos (uint16_t * r, uint16_t * c)
 /* acx1_set_cursor_pos ******************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_set_cursor_pos (uint16_t r, uint16_t c)
 {
-  char buf[0x40];
+  uint8_t buf[0x40];
   int rc;
+  uint_t cpos_len;
 
   pthread_mutex_lock(&mutex);
   if (writing)
@@ -1011,8 +1054,9 @@ ACX1_API unsigned int ACX1_CALL acx1_set_cursor_pos (uint16_t r, uint16_t c)
   pthread_mutex_unlock(&mutex);
   if (rc >= 0) return rc;
 
-  sprintf(buf, "\e[%u;%uH", r, c);
-  if (tty_write(buf, strlen(buf))) return ACX1_TERM_IO_FAILED;
+  cpos_len = set_cursor_pos_str(buf, r, c);
+  sprintf((char *) buf, "\e[%u;%uH", r, c);
+  if (tty_write(buf, cpos_len)) return ACX1_TERM_IO_FAILED;
 
   pthread_mutex_lock(&mutex);
   user_row = real_row = r;
@@ -1053,11 +1097,11 @@ ACX1_API unsigned int ACX1_CALL acx1_clear ()
   rc = !writing ? ACX1_NOT_WRITING : 0;
   pthread_mutex_unlock(&mutex);
   if (rc) return rc;
-  for (r = 1; r < height; ++r)
+  for (r = 1; r < screen_height; ++r)
   {
     rc = acx1_write_pos(r, 1);
     if (rc) return rc;
-    rc = acx1_fill(' ', width);
+    rc = acx1_fill(' ', screen_width);
     if (rc) return rc;
   }
 
@@ -1162,35 +1206,118 @@ ACX1_API unsigned int ACX1_CALL acx1_attr
   unsigned int mode
 )
 {
-  char buf[0x80];
-  int ia[0x10], in;
-  int o, k;
+  uint8_t buf[0x80];
+  uint_t len;
+  len = set_attr_str(buf, bg, fg, mode);
+  return tty_write(buf, len) ? ACX1_TERM_IO_FAILED : ACX1_OK;
+}
 
-  o = 0;
-  in = 0;
-  ia[in++] = 0;
-  if (bg < 0) return ACX1_NO_CODE;
-  if (bg < 8) ia[in++] = 40 + bg;
-  else if (bg < 0x10) ia[in++] = 100 - 8 + bg;
-  else { ia[in++] = 38; ia[in++] = 5; ia[in++] = bg; }
+/* acx1_rect ****************************************************************/
+ACX1_API uint_t ACX1_CALL acx1_rect
+(
+  uint8_t const * const * data, // array of rows of utf8 text with special escapes
+  uint16_t start_row,
+  uint16_t start_col,
+  uint16_t row_num, 
+  uint16_t col_num,
+  acx1_attr_t * attrs
+)
+{
+  static uint8_t buf[0x8000];
+#define BLIM (sizeof(buf) - 0x80)
+  int rc;
+  int chunk_attr = 0, crt_attr = -1;
+  uint_t i, row_ofs; // byte offset in current row
+  int row_width_left = 0; // width left in current row
+  size_t chunk_len, chunk_cps, chunk_width;
+  size_t buf_len;
+  char new_line;
 
-  if (fg < 0) return ACX1_NO_CODE;
-  if (fg < 8) ia[in++] = 30 + fg;
-  else if (fg < 0x10) ia[in++] = 90 - 8 + fg;
-  else { ia[in++] = 48; ia[in++] = 5; ia[in++] = fg; }
+  /* easy peasy? */
+  if (start_row > screen_height || start_col > screen_width) return 0;
 
-  if ((mode & ACX1_BOLD)) ia[in++] = 1;
-  if ((mode & ACX1_UNDERLINE)) ia[in++] = 4;
-  if ((mode & ACX1_INVERSE)) ia[in++] = 7;
+  if (row_num > screen_height - start_row + 1) row_num = screen_height - start_row + 1;
+  if (col_num > screen_width - start_col + 1) col_num = screen_width - start_col + 1;
 
-  buf[0] = 0x1B;
-  buf[1] = '[';
-  o = 2;
-  for (k = 0; k < in; ++k, o += strlen(&buf[o]))
+  for (new_line = 1, row_ofs = 0, i = 0, buf_len = 0; i < row_num; )
   {
-    sprintf(&buf[o], "%u;", ia[k]);
+    if (buf_len >= BLIM) goto l_write;
+
+    if (new_line)
+    {
+      buf_len += set_cursor_pos_str(&buf[buf_len], start_row + i, start_col);
+      new_line = 0;
+      row_ofs = 0;
+      row_width_left = col_num;
+      chunk_attr = 0;
+    }
+
+    if (data[i][row_ofs] == 0)
+    {
+      // end of row
+      if (row_width_left)
+      {
+        if (crt_attr)
+        {
+          crt_attr = 0;
+          buf_len += set_attr_str(&buf[buf_len], 
+                                  attrs[crt_attr].bg, attrs[crt_attr].fg,
+                                  attrs[crt_attr].mode);
+        }
+        if (buf_len + row_width_left >= BLIM) chunk_len = BLIM - buf_len - row_width_left;
+        else chunk_len = row_width_left;
+        C41_MEM_FILL(&buf[buf_len], chunk_len, ' ');
+        row_width_left -= chunk_len;
+        buf_len += chunk_len;
+        if (row_width_left) goto l_write;
+      }
+
+      new_line = 1;
+      ++i;
+      continue;
+    }
+    else if (data[i][row_ofs] == '\a')
+    {
+      // attr change
+      chunk_attr = data[i][row_ofs + 1];
+      row_ofs += 2;
+      continue;
+    }
+
+    rc = c41_utf8_str_measure(c41_term_char_width_wctx, NULL, data[i] + row_ofs,
+                              BLIM - buf_len, C41_SSIZE_MAX, row_width_left, 
+                              &chunk_len, &chunk_cps, &chunk_width);
+    if (rc < 0 && !chunk_len)
+    {
+      // malformed utf8; this could happen because of passing a truncated line
+      if (buf_len >= BLIM - 4) goto l_write; // maybe we truncated the input
+      // there's enough room to output one codepoint so the string is malformed
+      // or there's a non-printable other than NUL and \a
+      return ACX1_BAD_DATA;
+    }
+
+//l_append_chunk:
+    if (chunk_attr != crt_attr)
+    {
+      crt_attr = chunk_attr;
+      buf_len += set_attr_str(&buf[buf_len], 
+                              attrs[crt_attr].bg, attrs[crt_attr].fg,
+                              attrs[crt_attr].mode);
+    }
+    C41_MEM_COPY(&buf[buf_len], data[i] + row_ofs, chunk_len);
+    buf_len += chunk_len;
+    row_ofs += chunk_len;
+    row_width_left -= chunk_width;
+    if (!row_width_left) { new_line = 1; ++i; continue; }
+    if (buf_len < BLIM - 4) continue;
+
+l_write:
+    if (tty_write(buf, buf_len)) return ACX1_TERM_IO_FAILED;
+    buf_len = 0;
   }
-  buf[o - 1] = 'm';
-  return tty_write(buf, o) ? ACX1_TERM_IO_FAILED : ACX1_OK;
+
+  if (buf_len && tty_write(buf, buf_len)) return ACX1_TERM_OPEN_FAILED;
+
+  return 0;
 }
 
