@@ -449,9 +449,9 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
       }
       if (j < col_num)
       {
-        crt_attr = 0;
-        a = prepare_attr(attrs[crt_attr].bg, attrs[crt_attr].fg, 
-                         attrs[crt_attr].mode);
+        // crt_attr = 0;
+        // a = prepare_attr(attrs[crt_attr].bg, attrs[crt_attr].fg, 
+        //                  attrs[crt_attr].mode);
         for (; j < col_num; ++j, ++ci) 
         { ci->Char.UnicodeChar = ' '; ci->Attributes = a; }
       }

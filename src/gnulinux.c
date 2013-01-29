@@ -1257,13 +1257,13 @@ ACX1_API uint_t ACX1_CALL acx1_rect
       // end of row
       if (row_width_left)
       {
-        if (crt_attr)
-        {
-          crt_attr = 0;
-          buf_len += set_attr_str(&buf[buf_len], 
-                                  attrs[crt_attr].bg, attrs[crt_attr].fg,
-                                  attrs[crt_attr].mode);
-        }
+        // if (crt_attr)
+        // {
+        //   crt_attr = 0;
+        //   buf_len += set_attr_str(&buf[buf_len], 
+        //                           attrs[crt_attr].bg, attrs[crt_attr].fg,
+        //                           attrs[crt_attr].mode);
+        // }
         if (buf_len + row_width_left >= BLIM) chunk_len = BLIM - buf_len - row_width_left;
         else chunk_len = row_width_left;
         C41_MEM_FILL(&buf[buf_len], chunk_len, ' ');
