@@ -3,6 +3,7 @@
  * GNU/Linux Terminal support
  *
  * Changelog:
+ *  - 2013/01/30 Costin Ionescu: fixed bug when filling EOL
  *  - 2013/01/27 Costin Ionescu:
  *    - acx1_rect()
  *  - 2013/01/19 Costin Ionescu: 
@@ -82,17 +83,17 @@ static unsigned int decode_mode = 0;
 #define LW(...) (log_level >= 2 && log_file ? \
                  (fprintf(log_file, "[acx1]Warning(%s:%03u:%s): ", \
                                     __FILE__, __LINE__, __FUNCTION__), \
-                  fprintf(log_file, __VA_ARGS__)) : 0)
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
 
 #define LI(...) (log_level >= 3 && log_file ? \
                  (fprintf(log_file, "[acx1]Info(%s:%03u:%s): ", \
                                    __FILE__, __LINE__, __FUNCTION__), \
-                  fprintf(log_file, __VA_ARGS__)) : 0)
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
 
 #define LE(...) (log_level >= 1 && log_file ? \
                  (fprintf(log_file, "[acx1]Error(%s:%03u:%s): ", \
                                    __FILE__, __LINE__, __FUNCTION__), \
-                  fprintf(log_file, __VA_ARGS__)) : 0)
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
 
 #define Z(_cond, _rc) \
   if ((_cond)) { \
@@ -1223,7 +1224,7 @@ ACX1_API uint_t ACX1_CALL acx1_rect
   acx1_attr_t * attrs
 )
 {
-  static uint8_t buf[0x8000];
+  static uint8_t buf[0x10000];
 #define BLIM (sizeof(buf) - 0x80)
   int rc;
   int chunk_attr = 0, crt_attr = -1;
@@ -1241,6 +1242,7 @@ ACX1_API uint_t ACX1_CALL acx1_rect
 
   for (new_line = 1, row_ofs = 0, i = 0, buf_len = 0; i < row_num; )
   {
+    //LI("nl=%u,row_ofs=0x%X,row=0x%X,buf_len=0x%X,width_left=0x%X\n", new_line, row_ofs, i, (int) buf_len, row_width_left);
     if (buf_len >= BLIM) goto l_write;
 
     if (new_line)
@@ -1254,18 +1256,13 @@ ACX1_API uint_t ACX1_CALL acx1_rect
 
     if (data[i][row_ofs] == 0)
     {
+      //LI("end of row. buf_len=0x%X, width_left=0x%X\n", (int) buf_len, row_width_left);
       // end of row
       if (row_width_left)
       {
-        // if (crt_attr)
-        // {
-        //   crt_attr = 0;
-        //   buf_len += set_attr_str(&buf[buf_len], 
-        //                           attrs[crt_attr].bg, attrs[crt_attr].fg,
-        //                           attrs[crt_attr].mode);
-        // }
-        if (buf_len + row_width_left >= BLIM) chunk_len = BLIM - buf_len - row_width_left;
+        if (buf_len + row_width_left >= BLIM) chunk_len = BLIM - buf_len;
         else chunk_len = row_width_left;
+        //LI("clearing to EOL. len=0x%X\n", (int) chunk_len);
         C41_MEM_FILL(&buf[buf_len], chunk_len, ' ');
         row_width_left -= chunk_len;
         buf_len += chunk_len;
@@ -1284,19 +1281,21 @@ ACX1_API uint_t ACX1_CALL acx1_rect
       continue;
     }
 
+    //LI("measure(blim=0x%X,wlim=0x%X,str:%s)\n", (int) (BLIM - buf_len), row_width_left, data[i] + row_ofs);
     rc = c41_utf8_str_measure(c41_term_char_width_wctx, NULL, data[i] + row_ofs,
                               BLIM - buf_len, C41_SSIZE_MAX, row_width_left, 
                               &chunk_len, &chunk_cps, &chunk_width);
+    //LI(".. rc=%d: len=0x%X, cps=0x%X, width=0x%X\n", rc, (int) chunk_len, (int) chunk_cps, (int) chunk_width);
     if (rc < 0 && !chunk_len)
     {
       // malformed utf8; this could happen because of passing a truncated line
       if (buf_len >= BLIM - 4) goto l_write; // maybe we truncated the input
       // there's enough room to output one codepoint so the string is malformed
       // or there's a non-printable other than NUL and \a
+      //LI("passed bad data\n");
       return ACX1_BAD_DATA;
     }
 
-//l_append_chunk:
     if (chunk_attr != crt_attr)
     {
       crt_attr = chunk_attr;
@@ -1312,10 +1311,12 @@ ACX1_API uint_t ACX1_CALL acx1_rect
     if (buf_len < BLIM - 4) continue;
 
 l_write:
+    //LI("writing %lu bytes\n", buf_len);
     if (tty_write(buf, buf_len)) return ACX1_TERM_IO_FAILED;
     buf_len = 0;
   }
 
+  //LI("writing %lu bytes\n", buf_len);
   if (buf_len && tty_write(buf, buf_len)) return ACX1_TERM_OPEN_FAILED;
 
   return 0;
