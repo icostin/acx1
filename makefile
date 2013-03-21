@@ -45,21 +45,21 @@ uninstall:
 	-rm -rf $(PREFIX_DIR)/include/acx1.h $(PREFIX_DIR)/include/acx1
 	[ `whoami` != root ] || ldconfig
 	
-out/libacx1.so: out/gnulinux.o out/common.o | out/
+out/libacx1.so: out/gnulinux.o out/common.o | out
 	gcc -shared -o$@ $^ -lpthread -lc41
 	
-out/gnulinux.o: src/gnulinux.c include/acx1.h | out/
+out/gnulinux.o: src/gnulinux.c include/acx1.h | out
 	gcc -c $(gcc_flags) -Iinclude -O3 -fpic -o$@ -DACX1_DLIB_BUILD -DNDEBUG $<
 
 out/common.o: src/common.c | out/
 	gcc -c $(gcc_flags) -Iinclude -O3 -fpic -o$@ -DACX1_DLIB_BUILD -DNDEBUG $<
 
-out/test: src/test.c include/acx1.h | out/
-	gcc $(gcc_flags) -O3 -fPIC -o$@ -Iinclude -DACX1_DLIB_BUILD -DNDEBUG $< -Lout/ -lacx1
+out/test: src/test.c include/acx1.h | out
+	gcc $(gcc_flags) -O3 -fPIC -o$@ -Iinclude -DACX1_DLIB_BUILD -DNDEBUG $< -Lout -lacx1
 
 linesel: out/linesel dlib 
 	LD_LIBRARY_PATH=$(LD_LIBRARY_PATH):out $< < src/linesel.c
 
-out/linesel: src/linesel.c include/acx1.h dlib | out/
+out/linesel: src/linesel.c include/acx1.h dlib | out
 	gcc $(gcc_flags) -O3 -fPIC -o$@ -Iinclude -DNDEBUG $< -Lout -lacx1 -lc41
 
