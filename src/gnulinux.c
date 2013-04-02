@@ -1110,7 +1110,7 @@ ACX1_API unsigned int ACX1_CALL acx1_clear ()
   rc = !writing ? ACX1_NOT_WRITING : 0;
   pthread_mutex_unlock(&mutex);
   if (rc) return rc;
-  for (r = 1; r < screen_height; ++r)
+  for (r = 1; r <= screen_height; ++r)
   {
     rc = acx1_write_pos(r, 1);
     if (rc) return rc;
