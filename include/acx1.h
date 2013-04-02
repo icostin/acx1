@@ -168,10 +168,11 @@ typedef   signed int         int32_t;
 #define ACX1_WHITE              (7 | ACX1_LIGHT)
 
 /* event_types **************************************************************/
-#define ACX1_NONE 0
-#define ACX1_RESIZE 1
-#define ACX1_KEY 2
-#define ACX1_ERROR 3
+#define ACX1_NONE               0
+#define ACX1_RESIZE             1
+#define ACX1_KEY                2
+#define ACX1_ERROR              3
+#define ACX1_FINISH             4
 
 typedef struct acx1_event_s acx1_event_t;
 struct acx1_event_s

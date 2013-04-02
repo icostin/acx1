@@ -72,6 +72,7 @@ static char waiting_for_event = 0;
 static char waiting_for_cursor = 0;
 static char screen_resized = 0;
 static char sigwinch_set = 0;
+static char finishing = 0;
 static uint8_t cursor_mode = 0;
 
 static uint32_t * queue_a = NULL;
@@ -123,6 +124,7 @@ static uint_t ACX1_CALL set_cursor_pos_str (uint8_t * buf,
   return sprintf((char *) buf, "\e[%u;%uH", r, c);
 }
 
+/* set_attr_str *************************************************************/
 static uint_t ACX1_CALL set_attr_str (uint8_t * buf, int bg, int fg, int mode)
 {
   int ia[0x10], in;
@@ -879,6 +881,8 @@ ACX1_API void ACX1_CALL acx1_finish ()
 {
   int i;
 
+  finishing = 1;
+
   if (sigwinch_set)
   {
     struct sigaction sa;
@@ -992,6 +996,14 @@ ACX1_API unsigned int ACX1_CALL acx1_read_event (acx1_event_t * event_p)
   for (;;)
   {
     LI("read_event: checking event\n");
+
+    if (finishing)
+    {
+      LI("read_event: finishing\n");
+      event_p->type = ACX1_FINISH;
+      break;
+    }
+
     if (screen_resized)
     {
       LI("read_event: screen_resized\n");
