@@ -188,6 +188,7 @@ struct acx1_event_s
   };
 };
 
+#define ACX1_NORMAL             0
 #define ACX1_BOLD               (1 << 0)
 #define ACX1_UNDERLINE          (1 << 1)
 #define ACX1_INVERSE            (1 << 2)
