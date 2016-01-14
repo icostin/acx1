@@ -10,12 +10,15 @@
  *  - 2013/01/06 Costin Ionescu: initial release
  *
  */
+#define _POSIX_C_SOURCE 200809
+
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <malloc.h>
+#include <stdint.h>
+#include <limits.h>
 #include <errno.h>
 #include <acx1.h>
-#include <c41.h>
 
 int normal_bg = 4, normal_fg = 7;
 int sel_bg = 7, sel_fg = 0;
@@ -132,8 +135,8 @@ int linesel (char * * v, int n, char * init_str)
       A(acx1_write_pos(r, 1));
       c = strlen(v[xmap[i]]);
 
-      st = c41_utf8_str_measure(c41_term_char_width_wctx, NULL,
-                                v[xmap[i]], c, C41_SSIZE_MAX, w - 2,
+      st = acx1_utf8_str_measure(acx1_term_char_width_wctx, NULL,
+                                v[xmap[i]], c, SIZE_MAX - 3, w - 2,
                                 &bpar, &cpar, &wpar);
       if (st < 0)
       {

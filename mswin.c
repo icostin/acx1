@@ -1,3 +1,4 @@
+#ifdef _WIN32
 /* acx1 - Application Console Interface - ver. 1
  *
  * Windows console support
@@ -8,8 +9,7 @@
  *    are printed ok
  */
 #include <windows.h>
-#include <c41.h>
-#include <acx1.h>
+#include "acx1.h"
 
 static FILE * log_file = NULL;
 static int log_level = 0;
@@ -180,6 +180,7 @@ ACX1_API unsigned int ACX1_CALL acx1_set_cursor_mode (uint8_t mode)
 /* acx1_get_cursor_mode *****************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_get_cursor_mode (uint8_t * mode_p)
 {
+    (void) mode_p;
   return cci.bVisible;
 }
 
@@ -234,6 +235,7 @@ ACX1_API unsigned int ACX1_CALL acx1_write_start ()
 /* acx1_charset *************************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_charset (unsigned int cs)
 {
+    (void) cs;
   return ACX1_NO_CODE;
 }
 
@@ -276,26 +278,6 @@ ACX1_API unsigned int ACX1_CALL acx1_write_pos (uint16_t r, uint16_t c)
 /* acx1_write ***************************************************************/
 ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
 {
-//  WORD buf[0x200];
-//  DWORD wc;
-//  size_t cpc, width, bl, cl;
-//  int c;
-//
-//  c = c41_utf8_str_measure(c41_term_char_width_wctx, NULL,
-//                           data, len, C41_SSIZE_MAX, screen_width - write_col,
-//                           &bl, &cl, &width);
-//  if (c < 0) return ACX1_BAD_DATA;
-//
-//  c = c41_mutf8_str_decode(data, len, buf, C41_ITEM_COUNT(buf), NULL, &cpc);
-//  if (c) return ACX1_BAD_DATA;
-//
-//  if (!WriteConsoleW(hout, buf, cpc, &wc, NULL)) return ACX1_TERM_IO_FAILED;
-//
-//  write_col += width;
-//  if (write_col > screen_width) write_col = 0;
-//
-//  return 0;
-
   uint16_t buf[0x200];
   size_t cpc;
   int c;
@@ -305,16 +287,16 @@ ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
   COORD bs, bc;
   //uint8_t * b;
 
-  c = c41_mutf8_str_decode(data, len, buf, C41_ITEM_COUNT(buf), NULL, &cpc);
+  c = acx1_mutf8_str_decode(data, len, buf, ACX1_ITEM_COUNT(buf), NULL, &cpc);
   if (c) return ACX1_BAD_DATA;
 
   //b = data; cpc = len;
-  l = C41_ITEM_COUNT(ci);
+  l = ACX1_ITEM_COUNT(ci);
   for (c = 0, i = j = 0; c >= 0 && i < cpc && j < l; ++i, j += c)
   {
     ci[j].Char.UnicodeChar = buf[i];
     ci[j].Attributes = attr;
-    c = c41_term_char_width(buf[i]);
+    c = acx1_term_char_width(buf[i]);
   }
   if (c < 0) return ACX1_BAD_DATA;
   if (!j) return 0; // nothing to print
@@ -399,7 +381,7 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
   if (row_num > screen_height - start_row) row_num = screen_height - start_row;
   if (col_num > screen_width - start_col) col_num = screen_width - start_col;
 
-  buf_rows = C41_ITEM_COUNT(buf) / col_num;
+  buf_rows = ACX1_ITEM_COUNT(buf) / col_num;
   bs.X = col_num;
   bc.X = 0;
   bc.Y = 0;
@@ -416,14 +398,14 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
       {
         if (data[i][o] >= 0x80)
         {
-          l = c41_utf8_char_decode_strict(data[i] + o, C41_SSIZE_MAX, &cp);
+          l = acx1_utf8_char_decode_strict(data[i] + o, SSIZE_MAX, &cp);
           if (l < 0) return ACX1_BAD_DATA;
-          cw = c41_term_char_width(cp);
+          cw = acx1_term_char_width(cp);
           if (cw < 0) return ACX1_BAD_DATA;
           if (!cw) continue;
           if (cw == 2)
           {
-            if (j == col_num - 1) break; // finish line if a wide char is in last column
+            if (j == (uint_t) col_num - 1) break; // finish line if a wide char is in last column
             ci[1].Attributes = a;
             ci[1].Char.UnicodeChar = 0;
           }
@@ -440,7 +422,7 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
             l = 2;
             continue;
           }
-          if (cp < 0x20) ACX1_BAD_DATA;
+          if (cp < 0x20) return ACX1_BAD_DATA;
           l = 1; 
           cw = 1;
         }
@@ -469,3 +451,4 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
   return 0;
 }
 
+#endif

@@ -1,16 +1,10 @@
 /* acx1 - Application Console Interface - ver. 1
- *
- * Main header file
- *
- * Changelog:
- *  - 2013/01/18 Costin Ionescu: added constants for standard colours
- *  - 2013/01/06 Costin Ionescu: initial release
- *
  */
 #ifndef _ACX1_H_
 #define _ACX1_H_
 
 #include <stdio.h>
+#include <limits.h>
 
 /* int types ****************************************************************/
 #if !ACX1_HAVE_INT_TYPES
@@ -31,6 +25,10 @@ typedef   signed int         int32_t;
 # endif /* _MSC_VER / !_MSC_VER */
 #endif /* !ACX1_HAVE_INT_TYPES */
 
+#if !NO_UINT_T
+typedef unsigned int uint_t;
+#endif
+
 
 /* public api function attributes *******************************************/
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -49,7 +47,7 @@ typedef   signed int         int32_t;
 
 #if ACX1_STATIC
 # define ACX1_API
-#elif ACX1_DL_BUILD
+#elif ACX1_DLIB_BUILD
 # define ACX1_API ACX1_DL_EXPORT
 #else
 # define ACX1_API ACX1_DL_IMPORT
@@ -64,6 +62,8 @@ typedef   signed int         int32_t;
 #else
 #define ACX1_CALL
 #endif
+
+#define ACX1_ITEM_COUNT(_a) (sizeof(_a) / sizeof(_a[0]))
 
 /* status codes *************************************************************/
 #define ACX1_OK                 0
@@ -237,6 +237,41 @@ ACX1_API unsigned int ACX1_CALL acx1_rect
   uint16_t col_num,
   acx1_attr_t * attrs
 );
+
+ACX1_API void * ACX1_CALL acx1_hexz (void * out, void const * in, size_t len);
+ACX1_API int ACX1_CALL acx1_utf8_char_decode_strict
+(
+  void const * vdata,
+  size_t len,
+  uint32_t * out
+);
+
+ACX1_API int ACX1_CALL acx1_utf8_str_measure
+(
+  int (ACX1_CALL * wf) (uint32_t cp, void * ctx),
+  void * wf_ctx,
+  void const * data,
+  size_t b,
+  size_t c,
+  size_t w,
+  size_t * bp,
+  size_t * cp,
+  size_t * wp
+);
+
+ACX1_API int ACX1_CALL acx1_term_char_width_wctx (uint32_t cp, void * ctx);
+
+ACX1_API int ACX1_CALL acx1_mutf8_str_decode
+(
+  void const * vdata,
+  size_t len,
+  uint16_t * out_a,
+  size_t out_n,
+  size_t * in_len_p,
+  size_t * out_len_p
+);
+
+ACX1_API int ACX1_CALL acx1_term_char_width (uint32_t cp);
 
 #ifdef __cplusplus
 };

@@ -1,3 +1,7 @@
+#ifndef _WIN32
+
+#define _POSIX_C_SOURCE 199309
+
 /* acx1 - Application Console Interface - ver. 1
  *
  * GNU/Linux Terminal support
@@ -30,12 +34,11 @@
 #include <wchar.h>
 #include <pthread.h>
 
-#include <c41.h>
-#include <acx1.h>
+#include "acx1.h"
 
 char * escstr (char * out, size_t out_len, void const * buf, size_t len);
 
-static char const S7C1T[] = "\e F";
+//static char const S7C1T[] = "\e F";
 // static char const S8C1T[] = "\e G";
 char const SET_ANSI_CONFORMANCE_LEVEL_1[] = "\e L";
 char const SET_ANSI_CONFORMANCE_LEVEL_2[] = "\e M";
@@ -206,7 +209,7 @@ static int tty_write (void const * data, size_t len)
     uint8_t tmp[0x100];
     uint_t tl;
     tl = (len > sizeof(tmp) / 2) ? sizeof(tmp) / 2 : len;
-    LI("tty_write: tty=%d len=0x%lX %s\n", tty_fd, (long) len, (char *) c41_hexz(tmp, data, tl));
+    LI("tty_write: tty=%d len=0x%lX %s\n", tty_fd, (long) len, (char *) acx1_hexz(tmp, data, tl));
   }
 
   for (p = data; len; )
@@ -347,7 +350,7 @@ static int decode_input (uint8_t * data, size_t len, uint32_t * out,
   {
     // decode utf8 char >= 0x80
     int l;
-    l = c41_utf8_char_decode_strict(data, len, out);
+    l = acx1_utf8_char_decode_strict(data, len, out);
     if (l < 0) return DI_BAD;
     *used_len_p = l;
     return DI_KEY;
@@ -1275,7 +1278,7 @@ ACX1_API uint_t ACX1_CALL acx1_rect
         if (buf_len + row_width_left >= BLIM) chunk_len = BLIM - buf_len;
         else chunk_len = row_width_left;
         //LI("clearing to EOL. len=0x%X\n", (int) chunk_len);
-        C41_MEM_FILL(&buf[buf_len], chunk_len, ' ');
+        memset(&buf[buf_len], ' ', chunk_len);
         row_width_left -= chunk_len;
         buf_len += chunk_len;
         if (row_width_left) goto l_write;
@@ -1294,8 +1297,8 @@ ACX1_API uint_t ACX1_CALL acx1_rect
     }
 
     //LI("measure(blim=0x%X,wlim=0x%X,str:%s)\n", (int) (BLIM - buf_len), row_width_left, data[i] + row_ofs);
-    rc = c41_utf8_str_measure(c41_term_char_width_wctx, NULL, data[i] + row_ofs,
-                              BLIM - buf_len, C41_SSIZE_MAX, row_width_left, 
+    rc = acx1_utf8_str_measure(acx1_term_char_width_wctx, NULL, data[i] + row_ofs,
+                              BLIM - buf_len, SSIZE_MAX, row_width_left, 
                               &chunk_len, &chunk_cps, &chunk_width);
     //LI(".. rc=%d: len=0x%X, cps=0x%X, width=0x%X\n", rc, (int) chunk_len, (int) chunk_cps, (int) chunk_width);
     if (rc < 0 && !chunk_len)
@@ -1315,7 +1318,7 @@ ACX1_API uint_t ACX1_CALL acx1_rect
                               attrs[crt_attr].bg, attrs[crt_attr].fg,
                               attrs[crt_attr].mode);
     }
-    C41_MEM_COPY(&buf[buf_len], data[i] + row_ofs, chunk_len);
+    memcpy(&buf[buf_len], data[i] + row_ofs, chunk_len);
     buf_len += chunk_len;
     row_ofs += chunk_len;
     row_width_left -= chunk_width;
@@ -1334,3 +1337,4 @@ l_write:
   return 0;
 }
 
+#endif
