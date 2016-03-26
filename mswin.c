@@ -21,6 +21,21 @@ static uint16_t attr;
 static DWORD orig_in_mode, orig_out_mode;
 static CONSOLE_CURSOR_INFO cci;
 
+#define LW(...) (log_level >= 2 && log_file ? \
+                 (fprintf(log_file, "[acx1]Warning(%s:%03u:%s): ", \
+                                    __FILE__, __LINE__, __FUNCTION__), \
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
+
+#define LI(...) (log_level >= 3 && log_file ? \
+                 (fprintf(log_file, "[acx1]Info(%s:%03u:%s): ", \
+                                   __FILE__, __LINE__, __FUNCTION__), \
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
+
+#define LE(...) (log_level >= 1 && log_file ? \
+                 (fprintf(log_file, "[acx1]Error(%s:%03u:%s): ", \
+                                   __FILE__, __LINE__, __FUNCTION__), \
+                  fprintf(log_file, __VA_ARGS__), fflush(log_file)) : 0)
+
 /* acx1_name ****************************************************************/
 ACX1_API char const * ACX1_CALL acx1_name ()
 {
@@ -42,11 +57,11 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
 
   hout = hin = INVALID_HANDLE_VALUE;
 
-  hin = CreateFileA("CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
+  hin = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ,
                     NULL, OPEN_EXISTING, 0, NULL);
   if (hin == INVALID_HANDLE_VALUE) return ACX1_TERM_OPEN_FAILED;
 
-  hout = CreateFileA("CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE,
+  hout = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE,
                      NULL, OPEN_EXISTING, 0, NULL);
   if (hout == INVALID_HANDLE_VALUE) { rc = ACX1_TERM_OPEN_FAILED; goto l_fail; }
 
@@ -61,7 +76,7 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
   if (!GetConsoleMode(hout, &orig_out_mode))
   { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
 
-  if (!SetConsoleMode(hin, ENABLE_QUICK_EDIT_MODE))
+  if (!SetConsoleMode(hin, ENABLE_QUICK_EDIT_MODE | ENABLE_WINDOW_INPUT))
   { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
   if (!SetConsoleMode(hout, 0))
   { rc = ACX1_TERM_IO_FAILED; goto l_fail; }
@@ -93,12 +108,17 @@ ACX1_API unsigned int ACX1_CALL acx1_read_event (acx1_event_t * event_p)
 
   for (;;)
   {
-    if (!ReadConsoleInputW(hin, &ir, 1, &n)) return ACX1_TERM_IO_FAILED;
+    if (!ReadConsoleInputW(hin, &ir, 1, &n)) 
+    {
+        LE("read console input failed!\n");
+        return ACX1_TERM_IO_FAILED;
+    }
     if (ir.EventType == WINDOW_BUFFER_SIZE_EVENT)
     {
       event_p->type = ACX1_RESIZE;
       event_p->size.w = ir.Event.WindowBufferSizeEvent.dwSize.X;
       event_p->size.h = ir.Event.WindowBufferSizeEvent.dwSize.Y;
+      LI("screen resized to %ux%u\n", event_p->size.w, event_p->size.h);
       return 0;
     }
     if (ir.EventType == KEY_EVENT)
@@ -163,7 +183,7 @@ ACX1_API unsigned int ACX1_CALL acx1_read_event (acx1_event_t * event_p)
         event_p->km = m;
       }
       // else { event_p->km = '?'; }
-
+      LI("got key: 0x%X\n", event_p->km);
       return 0;
     }
   }
@@ -294,9 +314,15 @@ ACX1_API unsigned int ACX1_CALL acx1_write (void const * data, size_t len)
   l = ACX1_ITEM_COUNT(ci);
   for (c = 0, i = j = 0; c >= 0 && i < cpc && j < l; ++i, j += c)
   {
+    c = acx1_term_char_width(buf[i]);
+    if (!c) continue;
     ci[j].Char.UnicodeChar = buf[i];
     ci[j].Attributes = attr;
-    c = acx1_term_char_width(buf[i]);
+    if (c == 2)
+    {
+    ci[j + 1].Char.UnicodeChar = ' ';
+    ci[j + 1].Attributes = attr;
+    }
   }
   if (c < 0) return ACX1_BAD_DATA;
   if (!j) return 0; // nothing to print

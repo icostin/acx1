@@ -56,6 +56,7 @@ char const BACKARROW_SENDS_DEL[] = "\e[?67h";
 static pthread_t worker_th;
 static pthread_mutex_t mutex;
 static pthread_cond_t event_cond;
+static pthread_cond_t read_event_done_cond;
 static pthread_cond_t cursor_cond;
 static FILE * log_file = NULL;
 static int log_level = 0;
@@ -73,6 +74,8 @@ static char event_cond_created = 0;
 static char cursor_cond_created = 0;
 static char waiting_for_event = 0;
 static char waiting_for_cursor = 0;
+static char read_event_done = 0;
+static char read_event_done_created = 0;
 static char screen_resized = 0;
 static char sigwinch_set = 0;
 static char finishing = 0;
@@ -610,7 +613,7 @@ l_alt_pad:
   //   *used_len_p = 1;
   //   return DI_KEY;
   case 0x7F:
-    *out = ACX1_CTRL | ACX1_BACKSPACE;
+    *out = ACX1_BACKSPACE;
     return DI_KEY;
   default:
     *out = ACX1_CTRL | 0x40 | b;
@@ -683,6 +686,19 @@ static void * worker_main (void * arg)
         pthread_mutex_lock(&mutex);
         for (ofs = 0; ofs < n; ofs += ilen)
         {
+          LI("decoding input (%u bytes): "
+             "%02X %02X %02X %02X %02X %02X %02X %02X\n",
+             n - ofs,
+             ofs + 0 < n ? buf[ofs + 0] : 0xFF,
+             ofs + 1 < n ? buf[ofs + 1] : 0xFF,
+             ofs + 2 < n ? buf[ofs + 2] : 0xFF,
+             ofs + 3 < n ? buf[ofs + 3] : 0xFF,
+             ofs + 4 < n ? buf[ofs + 4] : 0xFF,
+             ofs + 5 < n ? buf[ofs + 5] : 0xFF,
+             ofs + 6 < n ? buf[ofs + 6] : 0xFF,
+             ofs + 7 < n ? buf[ofs + 7] : 0xFF
+            );
+
           di = decode_input(&buf[ofs], n - ofs, dec, &ilen, decode_mode);
           if (di == DI_KEY)
           {
@@ -829,6 +845,9 @@ ACX1_API unsigned int ACX1_CALL acx1_init ()
   Z(pthread_cond_init(&cursor_cond, NULL), ACX1_THREAD_ERROR);
   cursor_cond_created = 1;
 
+  Z(pthread_cond_init(&read_event_done_cond, NULL), ACX1_THREAD_ERROR);
+  read_event_done_created = 1;
+
   tty_fd = open("/dev/tty", O_RDWR | O_NONBLOCK);
   C(tty_fd >= 0, ACX1_TERM_OPEN_FAILED);
 
@@ -929,6 +948,26 @@ ACX1_API void ACX1_CALL acx1_finish ()
     worker_pipe[0] = -1;
   }
 
+  if (read_event_done_created)
+  {
+      LI("locking mutex\n");
+      pthread_mutex_lock(&mutex);
+      if (waiting_for_event)
+      {
+          LI("siglaling read_event\n");
+          pthread_cond_signal(&event_cond);
+          while (!read_event_done)
+          {
+              LI("waiting for read_event to be done\n");
+              pthread_cond_wait(&read_event_done_cond, &mutex);
+          }
+          LI("read_event is done\n");
+      }
+      LI("unlocking mutex\n");
+      pthread_mutex_unlock(&mutex);
+      LI("unlocked mutex\n");
+  }
+
   if (mutex_created)
   {
     i = pthread_mutex_destroy(&mutex);
@@ -976,6 +1015,7 @@ ACX1_API void ACX1_CALL acx1_finish ()
     }
     tty_fd = -1;
   }
+  LI("acx1 finished!\n");
 }
 
 /* acx1_get_screen_size *****************************************************/
@@ -1004,6 +1044,8 @@ ACX1_API unsigned int ACX1_CALL acx1_read_event (acx1_event_t * event_p)
     {
       LI("read_event: finishing\n");
       event_p->type = ACX1_FINISH;
+      read_event_done = 1;
+      pthread_cond_signal(&read_event_done_cond);
       break;
     }
 
