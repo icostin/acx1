@@ -11,9 +11,10 @@
  *
  */
 #define _POSIX_C_SOURCE 200809
+#define _BSD_SOURCE 1
 
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <limits.h>
